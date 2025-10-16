@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>イライラ棒ゲーム (長押し無効版)</title>
+  <title>イライラ棒ゲーム (超難易度15種版)</title>
   <style>
     body {
       background: #222;
@@ -13,42 +13,121 @@
     canvas {
       background: #eee;
       display: block;
-      margin: 20px auto;
+      margin: 0; /* 親要素の flex で中央寄せするため、margin: 0 に */
+      border: 1px solid #555;
     }
     button {
       margin: 5px;
       padding: 10px;
       cursor: pointer;
+      font-size: 14px;
+      background-color: #333; 
+      color: white;
+      border: 1px solid #777;
+      /* ボタンの高さ揃えを意識 */
+      line-height: 1.2;
+    }
+    
+    /* ★ 修正点1: 全体コンテナのレイアウト調整 */
+    #main-container {
+        width: 1000px; /* 左右の難易度欄 + 600pxゲーム画面を収める */
+        margin: 20px auto;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start; 
     }
 
+    #controls-left, #controls-right {
+      /* 左右の難易度選択欄 */
+      width: 180px; 
+      padding: 0 10px;
+      text-align: left;
+    }
+    
+    #game-area {
+      /* ゲーム画面とタイマーを中央に配置 */
+      width: 620px; /* Canvas(600) + 境界線 */
+      text-align: center;
+      padding: 0 10px;
+    }
+    
+    #difficulty-buttons-left, #difficulty-buttons-right {
+        /* ボタンを縦に並べるための調整 */
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        margin-bottom: 20px;
+    }
+    
+    /* ★ 修正点2: タイマーとユーティリティボタンの配置 */
+    #timer-utility-area {
+        margin-bottom: 10px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 1.2em;
+        font-weight: bold;
+    }
+    #timer-display {
+        margin-right: 15px;
+    }
+    #timer-utility-area button {
+        /* タイマー横のボタンは小さめに調整 */
+        padding: 6px 10px;
+        font-size: 13px;
+    }
+    
     /* 全画面表示した際のキャンバスのスタイル調整 */
     #game:fullscreen {
       width: 100vw;
       height: 100vh;
       margin: 0;
-    }
-    /* Webkit (Chrome, Safari) 用 */
-    #game:-webkit-full-screen {
-        width: 100vw;
-        height: 100vh;
-        margin: 0;
+      border: none; 
     }
   </style>
 </head>
 <body>
-  <h1>イライラ棒ゲーム (長押し無効化)</h1>
-  <div>
-    <button onclick="setDifficulty('easy')">簡単 (11x11)</button>
-    <button onclick="setDifficulty('normal')">普通 (15x15)</button>
-    <button onclick="setDifficulty('hard')">難しい (21x21)</button>
-    <button onclick="setDifficulty('hell')">Hell (31x31)</button>
-    <button onclick="setDifficulty('super_hell')">SUPER HELL (51x51)</button>
-    <button onclick="setDifficulty('ultimate_hell')">ULTIMATE HELL (71x71)</button>
-    <button onclick="resetBestTimes()" style="background-color: #f00;">🏆 記録リセット</button>
-    <button onclick="toggleFullScreen()">📺 全画面表示</button>
+  <h1>イライラ棒ゲーム</h1>
+  
+  <div id="main-container">
+    
+    <div id="controls-left">
+        <p style="margin-top: 0; font-size: 1.1em;">難易度（入門〜超上級）:</p>
+        <div id="difficulty-buttons-left">
+            <button onclick="setDifficulty('easy')">簡単 (11x11)</button>
+            <button onclick="setDifficulty('normal')">普通 (15x15)</button>
+            <button onclick="setDifficulty('hard')">難しい (21x21)</button>
+            <button onclick="setDifficulty('hell')">Hell (31x31)</button>
+            <button onclick="setDifficulty('super_hell')">SUPER HELL (51x51)</button>
+            <button onclick="setDifficulty('ultimate_hell')">ULTIMATE HELL (71x71)</button>
+            <button onclick="setDifficulty('mega_hell')">MEGA HELL (81x81)</button>
+            <button onclick="setDifficulty('giga_hell')">GIGA HELL (91x91)</button>
+            <button onclick="setDifficulty('tera_hell')">TERA HELL (101x101)</button>
+            <button onclick="setDifficulty('peta_hell')">PETA HELL (121x121)</button>
+        </div>
+    </div>
+    
+    <div id="game-area">
+        <div id="timer-utility-area">
+            <span id="timer-display">Time: 0.00s | Best: --</span>
+            <button onclick="resetBestTimes()">🏆 リセット</button>
+            <button onclick="toggleFullScreen()">📺 全画面</button>
+        </div>
+        
+        <canvas id="game" width="600" height="600"></canvas>
+    </div>
+
+    <div id="controls-right">
+        <p style="margin-top: 0; font-size: 1.1em;">難易度（極限）：</p>
+        <div id="difficulty-buttons-right">
+            <button onclick="setDifficulty('exa_hell')">EXA HELL (131x131)</button>
+            <button onclick="setDifficulty('zetta_hell')">ZETTA HELL (141x141)</button>
+            <button onclick="setDifficulty('yotta_hell')">YOTTA HELL (151x151)</button>
+            <button onclick="setDifficulty('infinity_hell')">INFINITY HELL (171x171)</button>
+            <button onclick="setDifficulty('god_hell')">GOD HELL (201x201)</button>
+        </div>
+    </div>
   </div>
-  <div id="timer">Time: 0.00s | Best: --</div>
-  <canvas id="game" width="500" height="500"></canvas>
 
   <audio id="hitSound" src="https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg"></audio>
   <audio id="goalSound" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
@@ -60,12 +139,24 @@
       hard: 21,
       hell: 31,
       super_hell: 51,
-      ultimate_hell: 71
+      ultimate_hell: 71,
+      mega_hell: 81,
+      giga_hell: 91,
+      tera_hell: 101,
+      peta_hell: 121,
+      // ★ 新難易度 5種 追加
+      exa_hell: 131,
+      zetta_hell: 141,
+      yotta_hell: 151,
+      infinity_hell: 171,
+      god_hell: 201
     };
+    
+    const BASE_SIZE = 600; 
 
     let currentDifficulty = 'easy';
     let mazeSize = difficultySettings[currentDifficulty];
-    let cellSize = 500 / mazeSize; 
+    let cellSize = BASE_SIZE / mazeSize; 
     let maze = [];
     let player = { x: 0, y: 0 };
     let goal = { x: mazeSize - 1, y: mazeSize - 1 };
@@ -81,7 +172,7 @@
     function setDifficulty(level) {
       currentDifficulty = level;
       mazeSize = difficultySettings[level];
-      cellSize = 500 / mazeSize; 
+      cellSize = BASE_SIZE / mazeSize; 
       resetGame();
     }
 
@@ -96,10 +187,11 @@
     function resetTimer() {
       clearInterval(timerInterval);
       timer = 0;
-      document.getElementById('timer').textContent = `Time: 0.00s | Best: ${bestTimes[currentDifficulty] || '--'}`;
+      // ★ 修正点5: タイマー表示IDを #timer から #timer-display に変更
+      document.getElementById('timer-display').textContent = `Time: 0.00s | Best: ${bestTimes[currentDifficulty] || '--'}`;
       timerInterval = setInterval(() => {
+        document.getElementById('timer-display').textContent = `Time: ${timer.toFixed(2)}s | Best: ${bestTimes[currentDifficulty] || '--'}`;
         timer += 0.01;
-        document.getElementById('timer').textContent = `Time: ${timer.toFixed(2)}s | Best: ${bestTimes[currentDifficulty] || '--'}`;
       }, 10);
     }
     
@@ -107,23 +199,22 @@
       if (confirm('全てのベストタイム記録をリセットしてもよろしいですか？')) {
         localStorage.removeItem('bestTimes');
         bestTimes = {};
-        document.getElementById('timer').textContent = `Time: ${timer.toFixed(2)}s | Best: --`;
+        document.getElementById('timer-display').textContent = `Time: ${timer.toFixed(2)}s | Best: --`;
         alert('全てのベストタイム記録をリセットしました。');
       }
     }
 
+    // 全画面表示/終了時の描画修正 (変更なし)
     function toggleFullScreen() {
       const element = document.getElementById('game');
-      if (!document.fullscreenElement) {
-        if (element.requestFullscreen) {
-          element.requestFullscreen();
-        } else if (element.webkitRequestFullscreen) {
-          element.webkitRequestFullscreen();
-        } else if (element.msRequestFullscreen) {
-          element.msRequestFullscreen();
-        }
+      const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
+
+      if (!isFullscreen) {
+        const requestFn = element.requestFullscreen || element.webkitRequestFullscreen || element.msRequestFullscreen;
+        if (requestFn) requestFn.call(element);
         
         const updateOnFullscreen = () => {
+            if (!document.fullscreenElement) return;
             const width = window.innerWidth;
             const height = window.innerHeight;
             
@@ -133,42 +224,33 @@
             cellSize = newSize / mazeSize;
             
             draw();
-            document.removeEventListener('fullscreenchange', updateOnFullscreen);
-            document.removeEventListener('webkitfullscreenchange', updateOnFullscreen);
-            document.removeEventListener('msfullscreenchange', updateOnFullscreen);
         };
         
-        document.addEventListener('fullscreenchange', updateOnFullscreen);
-        document.addEventListener('webkitfullscreenchange', updateOnFullscreen);
-        document.addEventListener('msfullscreenchange', updateOnFullscreen);
+        document.addEventListener('fullscreenchange', updateOnFullscreen, { once: true });
+        document.addEventListener('webkitfullscreenchange', updateOnFullscreen, { once: true });
+        document.addEventListener('msfullscreenchange', updateOnFullscreen, { once: true });
 
       } else {
-        if (document.exitFullscreen) {
-          document.exitFullscreen();
-        } else if (document.webkitExitFullscreen) {
-          document.webkitExitFullscreen();
-        } else if (document.msExitFullscreen) {
-          document.msExitFullscreen();
-        }
+        const exitFn = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+        if (exitFn) exitFn.call(document);
 
         const restoreOnExit = () => {
-            canvas.width = 500;
-            canvas.height = 500;
-            cellSize = 500 / mazeSize;
+            if (document.fullscreenElement) return;
+            
+            canvas.width = BASE_SIZE; 
+            canvas.height = BASE_SIZE;
+            cellSize = BASE_SIZE / mazeSize;
             draw();
-            document.removeEventListener('fullscreenchange', restoreOnExit);
-            document.removeEventListener('webkitfullscreenchange', restoreOnExit);
-            document.removeEventListener('msfullscreenchange', restoreOnExit);
         };
         
-        document.addEventListener('fullscreenchange', restoreOnExit);
-        document.addEventListener('webkitfullscreenchange', restoreOnExit);
-        document.addEventListener('msfullscreenchange', restoreOnExit);
+        document.addEventListener('fullscreenchange', restoreOnExit, { once: true });
+        document.addEventListener('webkitfullscreenchange', restoreOnExit, { once: true });
+        document.addEventListener('msfullscreenchange', restoreOnExit, { once: true });
       }
     }
 
 
-    // 深さ優先探索（DFS）ベースの迷路生成関数 (変更なし)
+    // 迷路生成関数 (変更なし)
     function generateMaze() {
         maze = Array.from({ length: mazeSize }, () =>
             Array.from({ length: mazeSize }, () => 1)
@@ -224,6 +306,7 @@
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height); 
 
+      // 壁（黒）と通路（背景色 #eee）の描画
       for (let y = 0; y < mazeSize; y++) {
         for (let x = 0; x < mazeSize; x++) {
           if (maze[y][x] === 1) {
@@ -233,17 +316,17 @@
         }
       }
 
-      // goal
+      // goal (緑)
       ctx.fillStyle = 'green';
       ctx.fillRect(goal.x * cellSize, goal.y * cellSize, cellSize, cellSize);
 
-      // player
+      // player (赤)
       ctx.fillStyle = 'red';
       ctx.fillRect(player.x * cellSize, player.y * cellSize, cellSize, cellSize);
     }
 
     document.addEventListener('keydown', (e) => {
-      // ★★★ 修正点：長押しによるブラウザの連続入力（キーリピート）を無視する ★★★
+      // 長押しによるブラウザの連続入力（キーリピート）を無視する
       if (e.repeat) return; 
       
       let dx = 0, dy = 0;
