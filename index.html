@@ -2,19 +2,23 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>イライラ棒ゲーム (超難易度15種版)</title>
+  <title>イライラ棒ゲーム (スマホ対応版)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <style>
     body {
       background: #222;
       color: white;
       text-align: center;
       font-family: sans-serif;
+      margin: 0; /* body の余白を削除 */
+      padding: 0;
     }
     canvas {
       background: #eee;
       display: block;
-      margin: 0; /* 親要素の flex で中央寄せするため、margin: 0 に */
+      margin: 0; 
       border: 1px solid #555;
+      touch-action: none; /* タッチ操作時のブラウザのピンチ操作などを無効化 */
     }
     button {
       margin: 5px;
@@ -24,42 +28,33 @@
       background-color: #333; 
       color: white;
       border: 1px solid #777;
-      /* ボタンの高さ揃えを意識 */
       line-height: 1.2;
     }
     
-    /* ★ 修正点1: 全体コンテナのレイアウト調整 */
+    /* PC/タブレット向けの基本レイアウト (1000px以上) */
     #main-container {
-        width: 1000px; /* 左右の難易度欄 + 600pxゲーム画面を収める */
+        width: 1000px;
         margin: 20px auto;
         display: flex;
         justify-content: center;
         align-items: flex-start; 
     }
-
     #controls-left, #controls-right {
-      /* 左右の難易度選択欄 */
       width: 180px; 
       padding: 0 10px;
       text-align: left;
     }
-    
     #game-area {
-      /* ゲーム画面とタイマーを中央に配置 */
-      width: 620px; /* Canvas(600) + 境界線 */
+      width: 620px;
       text-align: center;
       padding: 0 10px;
     }
-    
     #difficulty-buttons-left, #difficulty-buttons-right {
-        /* ボタンを縦に並べるための調整 */
         display: flex;
         flex-direction: column;
         gap: 5px;
         margin-bottom: 20px;
     }
-    
-    /* ★ 修正点2: タイマーとユーティリティボタンの配置 */
     #timer-utility-area {
         margin-bottom: 10px;
         display: flex;
@@ -71,10 +66,47 @@
     #timer-display {
         margin-right: 15px;
     }
-    #timer-utility-area button {
-        /* タイマー横のボタンは小さめに調整 */
-        padding: 6px 10px;
-        font-size: 13px;
+
+    /* ★ 修正点2: スマートフォン向けのレイアウト調整（画面幅が狭い場合） */
+    @media (max-width: 1020px) {
+        #main-container {
+            width: 95%; /* 画面幅いっぱいに広げる */
+            flex-direction: column; /* 要素を縦に並べる */
+            align-items: center; /* 中央寄せ */
+        }
+        #controls-left, #controls-right {
+            width: 90%; /* 幅を広げる */
+            text-align: center;
+            padding: 0;
+            margin-bottom: 10px;
+        }
+        #controls-left p, #controls-right p {
+            display: none; /* 説明文は非表示に */
+        }
+        #difficulty-buttons-left, #difficulty-buttons-right {
+            /* 左右の難易度を結合し、横並びに近い形で表示 */
+            flex-direction: row; 
+            flex-wrap: wrap; /* 折り返しを許可 */
+            justify-content: center;
+            gap: 5px;
+        }
+        #difficulty-buttons-left button, #difficulty-buttons-right button {
+             width: 45%; /* ボタンの幅を調整 */
+             margin: 2px;
+        }
+        #game-area {
+            width: 95%;
+            padding: 0;
+            /* スマホ画面に合わせて Canvas のサイズを調整するために、600px指定を解除 */
+            max-width: 600px; 
+        }
+        canvas {
+            width: 100%; /* 親要素に合わせて幅いっぱいにする */
+            height: auto;
+        }
+        h1 {
+            font-size: 1.5em;
+        }
     }
     
     /* 全画面表示した際のキャンバスのスタイル調整 */
@@ -144,7 +176,6 @@
       giga_hell: 91,
       tera_hell: 101,
       peta_hell: 121,
-      // ★ 新難易度 5種 追加
       exa_hell: 131,
       zetta_hell: 141,
       yotta_hell: 151,
@@ -153,7 +184,6 @@
     };
     
     const BASE_SIZE = 600; 
-
     let currentDifficulty = 'easy';
     let mazeSize = difficultySettings[currentDifficulty];
     let cellSize = BASE_SIZE / mazeSize; 
@@ -165,9 +195,11 @@
     let timerInterval;
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
-
     const hitSound = document.getElementById('hitSound');
     const goalSound = document.getElementById('goalSound');
+
+    let touchStartX = 0;
+    let touchStartY = 0;
 
     function setDifficulty(level) {
       currentDifficulty = level;
@@ -180,6 +212,14 @@
       player = { x: 0, y: 0 };
       goal = { x: mazeSize - 1, y: mazeSize - 1 };
       generateMaze();
+      
+      // ★ 修正点3: スマホでリセット時、キャンバスの描画サイズを再設定 
+      const currentCanvasSize = canvas.getBoundingClientRect().width;
+      if (currentCanvasSize > 0 && currentCanvasSize !== BASE_SIZE) {
+          cellSize = currentCanvasSize / mazeSize;
+      } else {
+          cellSize = BASE_SIZE / mazeSize;
+      }
       draw();
       resetTimer();
     }
@@ -187,7 +227,6 @@
     function resetTimer() {
       clearInterval(timerInterval);
       timer = 0;
-      // ★ 修正点5: タイマー表示IDを #timer から #timer-display に変更
       document.getElementById('timer-display').textContent = `Time: 0.00s | Best: ${bestTimes[currentDifficulty] || '--'}`;
       timerInterval = setInterval(() => {
         document.getElementById('timer-display').textContent = `Time: ${timer.toFixed(2)}s | Best: ${bestTimes[currentDifficulty] || '--'}`;
@@ -204,8 +243,8 @@
       }
     }
 
-    // 全画面表示/終了時の描画修正 (変更なし)
     function toggleFullScreen() {
+      // ... (全画面表示ロジックは変更なしでOK) ...
       const element = document.getElementById('game');
       const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
 
@@ -250,8 +289,8 @@
     }
 
 
-    // 迷路生成関数 (変更なし)
     function generateMaze() {
+        // ... (迷路生成ロジックは変更なし) ...
         maze = Array.from({ length: mazeSize }, () =>
             Array.from({ length: mazeSize }, () => 1)
         );
@@ -304,9 +343,9 @@
     }
 
     function draw() {
+      // ... (描画ロジックは変更なし) ...
       ctx.clearRect(0, 0, canvas.width, canvas.height); 
 
-      // 壁（黒）と通路（背景色 #eee）の描画
       for (let y = 0; y < mazeSize; y++) {
         for (let x = 0; x < mazeSize; x++) {
           if (maze[y][x] === 1) {
@@ -316,32 +355,15 @@
         }
       }
 
-      // goal (緑)
       ctx.fillStyle = 'green';
       ctx.fillRect(goal.x * cellSize, goal.y * cellSize, cellSize, cellSize);
 
-      // player (赤)
       ctx.fillStyle = 'red';
       ctx.fillRect(player.x * cellSize, player.y * cellSize, cellSize, cellSize);
     }
-
-    document.addEventListener('keydown', (e) => {
-      // 長押しによるブラウザの連続入力（キーリピート）を無視する
-      if (e.repeat) return; 
-      
-      let dx = 0, dy = 0;
-      
-      if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') dy = -1;
-      if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') dy = 1;
-      if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') dx = -1;
-      if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') dx = 1;
-
-      if (dx === 0 && dy === 0) return;
-      
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd'].includes(e.key.toLowerCase())) {
-        e.preventDefault();
-      }
-
+    
+    // ★ 修正点4: プレイヤーの移動処理を共通関数に分離
+    function movePlayer(dx, dy) {
       const newX = player.x + dx;
       const newY = player.y + dy;
 
@@ -375,10 +397,93 @@
           }
         }
       }
+    }
+
+    // キーボード操作 (長押し無効化済み)
+    document.addEventListener('keydown', (e) => {
+      if (e.repeat) return; 
+      
+      let dx = 0, dy = 0;
+      
+      if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') dy = -1;
+      if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') dy = 1;
+      if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') dx = -1;
+      if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') dx = 1;
+
+      if (dx === 0 && dy === 0) return;
+      
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd'].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+      }
+      
+      movePlayer(dx, dy);
+    });
+
+    // ★ 修正点5: タッチ操作の追加
+    canvas.addEventListener('touchstart', (e) => {
+        // 複数指のタッチを無視し、ピンチ操作を防ぐ
+        if (e.touches.length > 1) return; 
+        e.preventDefault();
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+    });
+
+    canvas.addEventListener('touchend', (e) => {
+        // touchend が発生した指の座標は e.changedTouches に格納される
+        if (!e.changedTouches.length) return; 
+        
+        const touchEndX = e.changedTouches[0].clientX;
+        const touchEndY = e.changedTouches[0].clientY;
+
+        const dx = touchEndX - touchStartX;
+        const dy = touchEndY - touchStartY;
+        
+        const threshold = 15; // スワイプと認識する最低移動距離 (ピクセル)
+        
+        // 移動量が小さい場合は、タップとみなして処理をスキップ
+        if (Math.abs(dx) < threshold && Math.abs(dy) < threshold) {
+            return;
+        }
+
+        // 縦移動か横移動か判定
+        if (Math.abs(dx) > Math.abs(dy)) {
+            // 横移動
+            if (dx > 0) {
+                movePlayer(1, 0); // 右
+            } else {
+                movePlayer(-1, 0); // 左
+            }
+        } else {
+            // 縦移動
+            if (dy > 0) {
+                movePlayer(0, 1); // 下
+            } else {
+                movePlayer(0, -1); // 上
+            }
+        }
     });
 
     // 初期化
     resetGame();
+
+    // 画面サイズ変更時の再描画処理（スマホの向き変更対応）
+    window.addEventListener('resize', () => {
+        if (!document.fullscreenElement) {
+            // フルスクリーンではない場合、Canvasの論理サイズを再計算
+            const rect = canvas.getBoundingClientRect();
+            // Canvasの論理的な幅/高さを設定し直し、再描画することでマスの比率を維持
+            canvas.width = rect.width;
+            canvas.height = rect.width; // 正方形を維持
+            
+            // 新しい cellSize を計算し直す
+            cellSize = canvas.width / mazeSize;
+            
+            draw();
+            // BASE_SIZE に戻すために、次の難易度選択/リセット時に BASE_SIZE を使って再計算されるようにしておく
+            canvas.width = BASE_SIZE; 
+            canvas.height = BASE_SIZE;
+        }
+    });
   </script>
 </body>
 </html>
