@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>イライラ棒ゲーム (全画面表示修正版)</title>
+  <title>イライラ棒ゲーム (長押し無効版)</title>
   <style>
     body {
       background: #222;
@@ -26,7 +26,6 @@
       width: 100vw;
       height: 100vh;
       margin: 0;
-      /* object-fit: contain は、キャンバス内の内容が拡大・縮小されないため、ここでは削除します */
     }
     /* Webkit (Chrome, Safari) 用 */
     #game:-webkit-full-screen {
@@ -37,7 +36,7 @@
   </style>
 </head>
 <body>
-  <h1>イライラ棒ゲーム (ULTIMATE HELL追加)</h1>
+  <h1>イライラ棒ゲーム (長押し無効化)</h1>
   <div>
     <button onclick="setDifficulty('easy')">簡単 (11x11)</button>
     <button onclick="setDifficulty('normal')">普通 (15x15)</button>
@@ -66,7 +65,6 @@
 
     let currentDifficulty = 'easy';
     let mazeSize = difficultySettings[currentDifficulty];
-    // 初期値のcellSizeは500を基準に計算される
     let cellSize = 500 / mazeSize; 
     let maze = [];
     let player = { x: 0, y: 0 };
@@ -83,7 +81,6 @@
     function setDifficulty(level) {
       currentDifficulty = level;
       mazeSize = difficultySettings[level];
-      // 難易度変更時は常に500x500を基準に計算
       cellSize = 500 / mazeSize; 
       resetGame();
     }
@@ -115,11 +112,9 @@
       }
     }
 
-    // ★★★ 修正点：全画面表示切り替え時にキャンバスサイズを調整する処理を追加 ★★★
     function toggleFullScreen() {
       const element = document.getElementById('game');
       if (!document.fullscreenElement) {
-        // 全画面表示へ
         if (element.requestFullscreen) {
           element.requestFullscreen();
         } else if (element.webkitRequestFullscreen) {
@@ -128,19 +123,15 @@
           element.msRequestFullscreen();
         }
         
-        // 全画面表示に切り替える直前にキャンバスの解像度を画面サイズに合わせる
-        // この処理で、CSSで拡大されたキャンバスに、解像度に見合った描画を再実行する
         const updateOnFullscreen = () => {
             const width = window.innerWidth;
             const height = window.innerHeight;
             
-            // 描画サイズを画面サイズに合わせる (この場合、正方形を維持するために小さい方の値を使用)
             const newSize = Math.min(width, height); 
             canvas.width = newSize;
             canvas.height = newSize;
-            cellSize = newSize / mazeSize; // cellSizeを新しいサイズで再計算
+            cellSize = newSize / mazeSize;
             
-            // 描画を更新
             draw();
             document.removeEventListener('fullscreenchange', updateOnFullscreen);
             document.removeEventListener('webkitfullscreenchange', updateOnFullscreen);
@@ -152,7 +143,6 @@
         document.addEventListener('msfullscreenchange', updateOnFullscreen);
 
       } else {
-        // 全画面表示を終了
         if (document.exitFullscreen) {
           document.exitFullscreen();
         } else if (document.webkitExitFullscreen) {
@@ -161,11 +151,10 @@
           document.msExitFullscreen();
         }
 
-        // 全画面表示を終了した後にキャンバスサイズを元に戻す
         const restoreOnExit = () => {
             canvas.width = 500;
             canvas.height = 500;
-            cellSize = 500 / mazeSize; // cellSizeを元のサイズで再計算
+            cellSize = 500 / mazeSize;
             draw();
             document.removeEventListener('fullscreenchange', restoreOnExit);
             document.removeEventListener('webkitfullscreenchange', restoreOnExit);
@@ -177,7 +166,6 @@
         document.addEventListener('msfullscreenchange', restoreOnExit);
       }
     }
-    // ★★★ 修正点 ここまで ★★★
 
 
     // 深さ優先探索（DFS）ベースの迷路生成関数 (変更なし)
@@ -234,17 +222,12 @@
     }
 
     function draw() {
-      // 描画ループごとにキャンバス全体をクリア
       ctx.clearRect(0, 0, canvas.width, canvas.height); 
-
-      // 背景色を再設定（キャンバスの基本背景はCSSで#eeeだが、ここで描画領域の全体をクリア）
-      // 不要だが、念のため。迷路の壁がない領域は白いままとなる。
 
       for (let y = 0; y < mazeSize; y++) {
         for (let x = 0; x < mazeSize; x++) {
           if (maze[y][x] === 1) {
             ctx.fillStyle = 'black';
-            // 現在の cellSize を使って描画
             ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
           }
         }
@@ -260,6 +243,9 @@
     }
 
     document.addEventListener('keydown', (e) => {
+      // ★★★ 修正点：長押しによるブラウザの連続入力（キーリピート）を無視する ★★★
+      if (e.repeat) return; 
+      
       let dx = 0, dy = 0;
       
       if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') dy = -1;
