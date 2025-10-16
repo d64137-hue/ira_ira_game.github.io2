@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>イライラ棒ゲーム (全画面表示修正版)</title>
+  <style>
+    body {
+      background: #222;
+      color: white;
+      text-align: center;
+      font-family: sans-serif;
+    }
+    canvas {
+      background: #eee;
+      display: block;
+      margin: 20px auto;
+    }
+    button {
+      margin: 5px;
+      padding: 10px;
+      cursor: pointer;
+    }
+
+    /* 全画面表示した際のキャンバスのスタイル調整 */
+    #game:fullscreen {
+      width: 100vw;
+      height: 100vh;
+      margin: 0;
+      /* object-fit: contain は、キャンバス内の内容が拡大・縮小されないため、ここでは削除します */
+    }
+    /* Webkit (Chrome, Safari) 用 */
+    #game:-webkit-full-screen {
+        width: 100vw;
+        height: 100vh;
+        margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>イライラ棒ゲーム (ULTIMATE HELL追加)</h1>
+  <div>
+    <button onclick="setDifficulty('easy')">簡単 (11x11)</button>
+    <button onclick="setDifficulty('normal')">普通 (15x15)</button>
+    <button onclick="setDifficulty('hard')">難しい (21x21)</button>
+    <button onclick="setDifficulty('hell')">Hell (31x31)</button>
+    <button onclick="setDifficulty('super_hell')">SUPER HELL (51x51)</button>
+    <button onclick="setDifficulty('ultimate_hell')">ULTIMATE HELL (71x71)</button>
+    <button onclick="resetBestTimes()" style="background-color: #f00;">🏆 記録リセット</button>
+    <button onclick="toggleFullScreen()">📺 全画面表示</button>
+  </div>
+  <div id="timer">Time: 0.00s | Best: --</div>
+  <canvas id="game" width="500" height="500"></canvas>
+
+  <audio id="hitSound" src="https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg"></audio>
+  <audio id="goalSound" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
+
+  <script>
+    const difficultySettings = {
+      easy: 11,
+      normal: 15,
+      hard: 21,
+      hell: 31,
+      super_hell: 51,
+      ultimate_hell: 71
+    };
+
+    let currentDifficulty = 'easy';
+    let mazeSize = difficultySettings[currentDifficulty];
+    // 初期値のcellSizeは500を基準に計算される
+    let cellSize = 500 / mazeSize; 
+    let maze = [];
+    let player = { x: 0, y: 0 };
+    let goal = { x: mazeSize - 1, y: mazeSize - 1 };
+    let timer = 0;
+    let bestTimes = JSON.parse(localStorage.getItem('bestTimes')) || {};
+    let timerInterval;
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+
+    const hitSound = document.getElementById('hitSound');
+    const goalSound = document.getElementById('goalSound');
+
+    function setDifficulty(level) {
+      currentDifficulty = level;
+      mazeSize = difficultySettings[level];
+      // 難易度変更時は常に500x500を基準に計算
+      cellSize = 500 / mazeSize; 
+      resetGame();
+    }
+
+    function resetGame() {
+      player = { x: 0, y: 0 };
+      goal = { x: mazeSize - 1, y: mazeSize - 1 };
+      generateMaze();
+      draw();
+      resetTimer();
+    }
+
+    function resetTimer() {
+      clearInterval(timerInterval);
+      timer = 0;
+      document.getElementById('timer').textContent = `Time: 0.00s | Best: ${bestTimes[currentDifficulty] || '--'}`;
+      timerInterval = setInterval(() => {
+        timer += 0.01;
+        document.getElementById('timer').textContent = `Time: ${timer.toFixed(2)}s | Best: ${bestTimes[currentDifficulty] || '--'}`;
+      }, 10);
+    }
+    
+    function resetBestTimes() {
+      if (confirm('全てのベストタイム記録をリセットしてもよろしいですか？')) {
+        localStorage.removeItem('bestTimes');
+        bestTimes = {};
+        document.getElementById('timer').textContent = `Time: ${timer.toFixed(2)}s | Best: --`;
+        alert('全てのベストタイム記録をリセットしました。');
+      }
+    }
+
+    // ★★★ 修正点：全画面表示切り替え時にキャンバスサイズを調整する処理を追加 ★★★
+    function toggleFullScreen() {
+      const element = document.getElementById('game');
+      if (!document.fullscreenElement) {
+        // 全画面表示へ
+        if (element.requestFullscreen) {
+          element.requestFullscreen();
+        } else if (element.webkitRequestFullscreen) {
+          element.webkitRequestFullscreen();
+        } else if (element.msRequestFullscreen) {
+          element.msRequestFullscreen();
+        }
+        
+        // 全画面表示に切り替える直前にキャンバスの解像度を画面サイズに合わせる
+        // この処理で、CSSで拡大されたキャンバスに、解像度に見合った描画を再実行する
+        const updateOnFullscreen = () => {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            
+            // 描画サイズを画面サイズに合わせる (この場合、正方形を維持するために小さい方の値を使用)
+            const newSize = Math.min(width, height); 
+            canvas.width = newSize;
+            canvas.height = newSize;
+            cellSize = newSize / mazeSize; // cellSizeを新しいサイズで再計算
+            
+            // 描画を更新
+            draw();
+            document.removeEventListener('fullscreenchange', updateOnFullscreen);
+            document.removeEventListener('webkitfullscreenchange', updateOnFullscreen);
+            document.removeEventListener('msfullscreenchange', updateOnFullscreen);
+        };
+        
+        document.addEventListener('fullscreenchange', updateOnFullscreen);
+        document.addEventListener('webkitfullscreenchange', updateOnFullscreen);
+        document.addEventListener('msfullscreenchange', updateOnFullscreen);
+
+      } else {
+        // 全画面表示を終了
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        } else if (document.msExitFullscreen) {
+          document.msExitFullscreen();
+        }
+
+        // 全画面表示を終了した後にキャンバスサイズを元に戻す
+        const restoreOnExit = () => {
+            canvas.width = 500;
+            canvas.height = 500;
+            cellSize = 500 / mazeSize; // cellSizeを元のサイズで再計算
+            draw();
+            document.removeEventListener('fullscreenchange', restoreOnExit);
+            document.removeEventListener('webkitfullscreenchange', restoreOnExit);
+            document.removeEventListener('msfullscreenchange', restoreOnExit);
+        };
+        
+        document.addEventListener('fullscreenchange', restoreOnExit);
+        document.addEventListener('webkitfullscreenchange', restoreOnExit);
+        document.addEventListener('msfullscreenchange', restoreOnExit);
+      }
+    }
+    // ★★★ 修正点 ここまで ★★★
+
+
+    // 深さ優先探索（DFS）ベースの迷路生成関数 (変更なし)
+    function generateMaze() {
+        maze = Array.from({ length: mazeSize }, () =>
+            Array.from({ length: mazeSize }, () => 1)
+        );
+
+        const stack = [];
+        let currentX = 0;
+        let currentY = 0;
+        maze[currentY][currentX] = 0;
+        stack.push({ x: currentX, y: currentY });
+
+        while (stack.length > 0) {
+            const current = stack[stack.length - 1]; 
+            currentX = current.x;
+            currentY = current.y;
+
+            let directions = [ [0, -1], [0, 1], [-1, 0], [1, 0] ];
+            for (let i = directions.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [directions[i], directions[j]] = [directions[j], directions[i]];
+            }
+
+            let foundNeighbor = false;
+            
+            for (const [dx, dy] of directions) {
+                const wallX = currentX + dx;
+                const wallY = currentY + dy;
+                const nextX = currentX + dx * 2;
+                const nextY = currentY + dy * 2;
+
+                if (
+                    nextX >= 0 && nextX < mazeSize &&
+                    nextY >= 0 && nextY < mazeSize &&
+                    maze[nextY][nextX] === 1
+                ) {
+                    maze[wallY][wallX] = 0;
+                    maze[nextY][nextX] = 0;
+                    stack.push({ x: nextX, y: nextY });
+                    foundNeighbor = true;
+                    break;
+                }
+            }
+
+            if (!foundNeighbor) {
+                stack.pop();
+            }
+        }
+        
+        maze[0][0] = 0;
+        maze[mazeSize - 1][mazeSize - 1] = 0;
+    }
+
+    function draw() {
+      // 描画ループごとにキャンバス全体をクリア
+      ctx.clearRect(0, 0, canvas.width, canvas.height); 
+
+      // 背景色を再設定（キャンバスの基本背景はCSSで#eeeだが、ここで描画領域の全体をクリア）
+      // 不要だが、念のため。迷路の壁がない領域は白いままとなる。
+
+      for (let y = 0; y < mazeSize; y++) {
+        for (let x = 0; x < mazeSize; x++) {
+          if (maze[y][x] === 1) {
+            ctx.fillStyle = 'black';
+            // 現在の cellSize を使って描画
+            ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+          }
+        }
+      }
+
+      // goal
+      ctx.fillStyle = 'green';
+      ctx.fillRect(goal.x * cellSize, goal.y * cellSize, cellSize, cellSize);
+
+      // player
+      ctx.fillStyle = 'red';
+      ctx.fillRect(player.x * cellSize, player.y * cellSize, cellSize, cellSize);
+    }
+
+    document.addEventListener('keydown', (e) => {
+      let dx = 0, dy = 0;
+      
+      if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') dy = -1;
+      if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') dy = 1;
+      if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') dx = -1;
+      if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') dx = 1;
+
+      if (dx === 0 && dy === 0) return;
+      
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd'].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+      }
+
+      const newX = player.x + dx;
+      const newY = player.y + dy;
+
+      if (
+        newX >= 0 && newX < mazeSize &&
+        newY >= 0 && newY < mazeSize
+      ) {
+        if (maze[newY][newX] === 1) {
+          clearInterval(timerInterval); 
+          hitSound.currentTime = 0;
+          hitSound.play();
+          resetGame();
+          
+        } else {
+          player.x = newX;
+          player.y = newY;
+          draw();
+
+          if (player.x === goal.x && player.y === goal.y) {
+            clearInterval(timerInterval);
+            goalSound.play();
+            const finalTime = timer.toFixed(2);
+
+            if (!bestTimes[currentDifficulty] || timer < bestTimes[currentDifficulty]) {
+              bestTimes[currentDifficulty] = finalTime;
+              localStorage.setItem('bestTimes', JSON.stringify(bestTimes));
+              alert(`ゴール！新記録：${finalTime} 秒`);
+            } else {
+              alert(`ゴール！タイム：${finalTime} 秒`);
+            }
+          }
+        }
+      }
+    });
+
+    // 初期化
+    resetGame();
+  </script>
+</body>
+</html>
