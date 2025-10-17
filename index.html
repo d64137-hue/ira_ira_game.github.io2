@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>イライラ棒ゲーム (最終・究極安定版)</title>
+  <title>イライラ棒ゲーム (究極・多機能版)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <style>
     body {
@@ -12,6 +12,7 @@
       font-family: sans-serif;
       margin: 0;
       padding: 0;
+      transition: background-color 0.1s; /* ヒットエフェクト用 */
     }
     canvas {
       background: #eee;
@@ -19,6 +20,7 @@
       margin: 0; 
       border: 1px solid #555;
       touch-action: none;
+      transition: box-shadow 0.2s; /* ゴールエフェクト用 */
     }
     button {
       margin: 5px;
@@ -29,8 +31,38 @@
       color: white;
       border: 1px solid #777;
       line-height: 1.2;
+      transition: background-color 0.1s;
     }
     
+    /* アクティブなモードボタンのスタイルは不要になるが、通常モードの切り替えのために残す */
+    .mode-button.active-mode {
+        background-color: #4CAF50 !important; 
+        border-color: #76FF03;
+        font-weight: bold;
+    }
+    
+    /* チェックボックスとラベルのスタイル */
+    .mode-checkbox-container {
+        display: flex;
+        align-items: center;
+        margin: 5px 0;
+    }
+    .mode-checkbox-container label {
+        margin-left: 5px;
+        flex-grow: 1;
+        text-align: left;
+        cursor: pointer;
+        padding: 5px 0;
+        border-radius: 3px;
+        /* ★モード名の折り返し防止 */
+        white-space: nowrap; 
+    }
+    .mode-checkbox-container input[type="checkbox"] {
+        transform: scale(1.3);
+        margin-right: 10px;
+        cursor: pointer;
+    }
+
     /* PC/タブレット向けの基本レイアウト (1000px以上) */
     #main-container {
         width: 1000px;
@@ -44,17 +76,34 @@
       padding: 0 10px;
       text-align: left;
     }
+    /* ★難易度名タイトル */
+    #controls-left p {
+        /* 難易度名タイトルの折り返し防止 */
+        white-space: nowrap; 
+    }
+    /* ★モード名タイトル */
+    #mode-control p, #customization-area p {
+        /* モード名/カスタマイズ名タイトルの折り返し防止 */
+        white-space: nowrap;
+    }
+
     #game-area {
       width: 620px;
       text-align: center;
       padding: 0 10px;
     }
-    #difficulty-buttons-left, #difficulty-buttons-right {
+    /* 難易度ボタンを縦に並べる */
+    #difficulty-buttons {
         display: flex;
         flex-direction: column;
         gap: 5px;
         margin-bottom: 20px;
     }
+    #difficulty-buttons button {
+        width: 100%;
+        text-align: left;
+    }
+
     #timer-utility-area {
         margin-bottom: 10px;
         display: flex;
@@ -62,9 +111,51 @@
         align-items: center;
         font-size: 1.2em;
         font-weight: bold;
+        /* タイマー表示が折り返さないようにする */
+        white-space: nowrap; 
     }
     #timer-display {
         margin-right: 15px;
+    }
+    #time-limit-setting {
+        margin-top: 10px;
+        text-align: center;
+        font-size: 0.9em;
+    }
+    #time-limit-setting input {
+        width: 60px;
+        padding: 5px;
+        font-size: 1em;
+        margin-left: 5px;
+        background: #333;
+        color: white;
+        border: 1px solid #777;
+    }
+
+    /* モード・カスタマイズエリア */
+    #mode-control, #customization-area {
+        margin-top: 20px;
+        padding: 10px;
+        border: 1px solid #444;
+        border-radius: 5px;
+        background: #2a2a2a;
+    }
+    #mode-control { margin-top: 0; }
+    #mode-control button {
+        width: 100%;
+        margin-bottom: 5px;
+        padding: 8px;
+    }
+    /* 通常モードボタンのみ特別扱い */
+    #mode-normal-button {
+        background-color: #555;
+        font-weight: bold;
+    }
+    
+
+    #customization-area button {
+        margin: 3px;
+        padding: 6px 10px;
     }
 
     /* スマートフォン向けのレイアウト調整（画面幅が狭い場合） */
@@ -81,27 +172,27 @@
             margin-bottom: 10px;
         }
         #controls-left p, #controls-right p {
-            display: none;
+             /* 難易度・モードタイトルの表示 */
+            display: block; 
+            text-align: center;
+            /* スマホで横並びになるので、折り返し防止は解除しない */
         }
-        #difficulty-buttons-left, #difficulty-buttons-right {
+        #difficulty-buttons {
             flex-direction: row; 
             flex-wrap: wrap;
             justify-content: center;
             gap: 5px;
         }
-        #difficulty-buttons-left button, #difficulty-buttons-right button {
-             width: 45%;
+        #difficulty-buttons button, #mode-control button {
+             width: 45%; /* スマホでは2列にする */
              margin: 2px;
+             text-align: center;
         }
-        #game-area {
-            width: 95%;
-            padding: 0;
-            max-width: 600px;
-        }
-        canvas {
-            width: 100%; 
-            height: auto;
-        }
+        #mode-control button { width: 100%; }
+        
+        /* モードコントロールの配置調整 */
+        #controls-right { order: -1; margin-bottom: 20px;}
+        #controls-left { order: -2; }
     }
     
     /* 全画面表示した際のキャンバスのスタイル調整（F11対応も含む） */
@@ -112,6 +203,22 @@
       border: none; 
       object-fit: contain; 
     }
+
+    /* 説明モーダルのスタイル */
+    .modal {
+        display: none; position: fixed; z-index: 100; left: 0; top: 0;
+        width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.8);
+    }
+    .modal-content {
+        background-color: #333; margin: 5% auto; padding: 20px; border: 1px solid #555;
+        width: 90%; max-width: 700px; border-radius: 8px; color: white; text-align: left;
+    }
+    .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; }
+    .close:hover, .close:focus { color: white; text-decoration: none; cursor: pointer; }
+    .rule-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    .rule-table th, .rule-table td { border: 1px solid #555; padding: 8px; }
+    .rule-table th { background-color: #444; color: #76FF03; }
+    .rule-table .gimmick-desc { font-size: 0.9em; color: #ccc;}
   </style>
 </head>
 <body>
@@ -120,8 +227,8 @@
   <div id="main-container">
     
     <div id="controls-left">
-        <p style="margin-top: 0; font-size: 1.1em;">難易度（入門〜超上級）:</p>
-        <div id="difficulty-buttons-left">
+        <p style="margin-top: 0; font-size: 1.1em; text-align: center;">難易度選択 (迷路サイズ):</p>
+        <div id="difficulty-buttons">
             <button onclick="setDifficulty('easy')">簡単 (11x11)</button>
             <button onclick="setDifficulty('normal')">普通 (15x15)</button>
             <button onclick="setDifficulty('hard')">難しい (21x21)</button>
@@ -132,12 +239,19 @@
             <button onclick="setDifficulty('giga_hell')">GIGA HELL (91x91)</button>
             <button onclick="setDifficulty('tera_hell')">TERA HELL (101x101)</button>
             <button onclick="setDifficulty('peta_hell')">PETA HELL (121x121)</button>
+            <button onclick="setDifficulty('exa_hell')">EXA HELL (131x131)</button>
+            <button onclick="setDifficulty('zetta_hell')">ZETTA HELL (141x141)</button>
+            <button onclick="setDifficulty('yotta_hell')">YOTTA HELL (151x151)</button>
+            <button onclick="setDifficulty('infinity_hell')">INFINITY HELL (171x171)</button>
+            <button onclick="setDifficulty('god_hell')">GOD HELL (201x201)</button>
+            <button onclick="setDifficulty('brutal_hell')">**BRUTAL HELL (221x221)**</button>
+            <button onclick="setDifficulty('singularity_hell')">**SINGULARITY HELL (251x251)**</button>
         </div>
     </div>
     
     <div id="game-area">
         <div id="timer-utility-area">
-            <span id="timer-display">Time: 0.00s | Best: --</span>
+            <span id="timer-display">Time: 0.00s | Score: 0 | Best: --</span>
             <button onclick="resetBestTimes()">🏆 リセット</button>
             <button onclick="toggleFullScreen()">📺 全画面</button>
         </div>
@@ -146,14 +260,118 @@
     </div>
 
     <div id="controls-right">
-        <p style="margin-top: 0; font-size: 1.1em;">難易度（極限）：</p>
-        <div id="difficulty-buttons-right">
-            <button onclick="setDifficulty('exa_hell')">EXA HELL (131x131)</button>
-            <button onclick="setDifficulty('zetta_hell')">ZETTA HELL (141x141)</button>
-            <button onclick="setDifficulty('yotta_hell')">YOTTA HELL (151x151)</button>
-            <button onclick="setDifficulty('infinity_hell')">INFINITY HELL (171x171)</button>
-            <button onclick="setDifficulty('god_hell')">GOD HELL (201x201)</button>
+        <div id="mode-control">
+            <p style="margin-top: 0; font-size: 1.1em; text-align: center;">ゲームモード選択 (複数選択可):</p>
+            
+            <button id="mode-normal-button" onclick="setMode('normal')">通常モード (全てOFF)</button>
+
+            <div class="mode-checkbox-container">
+                <input type="checkbox" id="mode-ghost" onchange="resetGame(true)">
+                <label for="mode-ghost">👻 ゴーストモード</label>
+            </div>
+            
+            <div class="mode-checkbox-container">
+                <input type="checkbox" id="mode-timeAttack" onchange="resetGame(true)">
+                <label for="mode-timeAttack">⏱️ 制限時間モード</label>
+            </div>
+            
+            <div class="mode-checkbox-container">
+                <input type="checkbox" id="mode-gimmick" onchange="resetGame(true)">
+                <label for="mode-gimmick">🧩 ギミックモード</label>
+            </div>
+
+            <div id="time-limit-setting">
+                制限時間: 
+                <input type="number" id="time-limit-input" value="60" min="5" onchange="updateTimeLimit(this.value)">秒
+            </div>
+            <button onclick="document.getElementById('rule-modal').style.display = 'block';" style="margin-top: 10px; background-color: #444;">💡 モード詳細説明</button>
         </div>
+
+        <div id="customization-area">
+            <p style="margin-top: 0; font-size: 1.1em; text-align: center;">プレイヤーカスタマイズ:</p>
+            <p style="margin: 5px 0 3px 0; font-size: 0.9em;">色:</p>
+            <button onclick="setPlayerColor('red')" style="background-color: red;">赤</button>
+            <button onclick="setPlayerColor('blue')" style="background-color: blue;">青</button>
+            <button onclick="setPlayerColor('yellow')" style="background-color: gold;">黄</button>
+            <p style="margin: 5px 0 3px 0; font-size: 0.9em;">形:</p>
+            <button onclick="setPlayerShape('square')">■ 四角</button>
+            <button onclick="setPlayerShape('circle')">● 丸</button>
+        </div>
+    </div>
+  </div>
+
+  <div id="rule-modal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="document.getElementById('rule-modal').style.display = 'none';">&times;</span>
+      <h2>🧩 ゲームモードと機能の詳細</h2>
+      
+      <h3>モード別詳細</h3>
+      <table class="rule-table">
+        <thead>
+          <tr>
+            <th>モード名</th>
+            <th>ルール</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>**通常モード**</td>
+            <td>純粋なタイムアタック。追加のルール/ギミックなし。</td>
+          </tr>
+          <tr>
+            <td>**ゴーストモード**</td>
+            <td>プレイヤーが通った跡（**直前3マス**）が一時的な壁になります。自分の軌跡に触れるとゲームオーバーです。</td>
+          </tr>
+          <tr>
+            <td>**制限時間モード**</td>
+            <td>設定時間からカウントダウン。時間切れ（0秒）になるとゲームオーバーです。</td>
+          </tr>
+          <tr>
+            <td>**ギミックモード**</td>
+            <td>迷路内に特殊なマスがランダムに配置されます。</td>
+          </tr>
+          <tr>
+            <td colspan="2">**複合モード**</td>
+          </tr>
+          <tr>
+            <td colspan="2" class="gimmick-desc">**複数チェックでルールを組み合わせられます！** (例: ゴースト + 制限時間 + ギミック)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>ギミックモードで出現する特殊マス</h3>
+      <table class="rule-table">
+        <thead>
+          <tr>
+            <th>機能名</th>
+            <th>見た目</th>
+            <th>効果</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>**スコアアイテム**</td>
+            <td><span style="color: gold;">●（黄色い丸）</span></td>
+            <td class="gimmick-desc">集めるとスコアが10点加算されます。一度取得すると消滅します。</td>
+          </tr>
+          <tr>
+            <td>**ワープマス**</td>
+            <td><span style="background-color: #8a2be2; padding: 0 5px;">■（紫色）</span></td>
+            <td class="gimmick-desc">踏むと、迷路内の別のランダムな通路マスに移動させられます。</td>
+          </tr>
+          <tr>
+            <td>**リバースマス**</td>
+            <td><span style="color: deeppink;">▼（濃いピンク）</span></td>
+            <td class="gimmick-desc">踏むと、次の**10回の移動操作の方向**が反転します（上入力で下に、左入力で右に動く）。</td>
+          </tr>
+          <tr>
+            <td>**減速マス**</td>
+            <td><span style="color: aqua;">△（水色）</span></td>
+            <td class="gimmick-desc">踏むと、次の**1回の移動操作**がキャンセルされます。一歩踏み損ねるスロー効果です。</td>
+          </tr>
+        </tbody>
+      </table>
+
     </div>
   </div>
 
@@ -161,14 +379,19 @@
   <audio id="goalSound" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
 
   <script>
+    // --- 定数とグローバル変数 ---
     const difficultySettings = {
       easy: 11, normal: 15, hard: 21, hell: 31, super_hell: 51,
       ultimate_hell: 71, mega_hell: 81, giga_hell: 91, tera_hell: 101,
       peta_hell: 121, exa_hell: 131, zetta_hell: 141, yotta_hell: 151,
-      infinity_hell: 171, god_hell: 201
+      infinity_hell: 171, god_hell: 201,
+      brutal_hell: 221, 
+      singularity_hell: 251 
     };
-    
+    const CELL_TYPE = { WALL: 1, PATH: 0, SCORE: 2, WARP: 3, REVERSE: 4, SLOW: 5 };
     const BASE_SIZE = 600; 
+    const TRAIL_LENGTH = 3; 
+    
     let currentDifficulty = 'easy';
     let mazeSize = difficultySettings[currentDifficulty];
     let cellSize = BASE_SIZE / mazeSize; 
@@ -176,8 +399,19 @@
     let player = { x: 0, y: 0 };
     let goal = { x: mazeSize - 1, y: mazeSize - 1 };
     let timer = 0;
+    let score = 0;
+    let timeLimit = parseInt(localStorage.getItem('timeLimit')) || 60; 
     let bestTimes = JSON.parse(localStorage.getItem('bestTimes')) || {};
     let timerInterval;
+
+    let activeModes = JSON.parse(localStorage.getItem('activeModes')) || {}; 
+    let playerColor = localStorage.getItem('playerColor') || 'red'; 
+    let playerShape = localStorage.getItem('playerShape') || 'square'; 
+    let playerTrail = []; 
+
+    let reverseMovesRemaining = 0; 
+    let slowTurnActive = false; 
+
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
     const hitSound = document.getElementById('hitSound');
@@ -186,6 +420,55 @@
     let touchStartX = 0;
     let touchStartY = 0;
 
+    // --- UI/設定関数 ---
+
+    function setPlayerColor(color) {
+        playerColor = color;
+        localStorage.setItem('playerColor', color);
+        draw();
+    }
+
+    function setPlayerShape(shape) {
+        playerShape = shape;
+        localStorage.setItem('playerShape', shape);
+        draw();
+    }
+
+    function updateTimeLimit(value) {
+        const limit = parseInt(value);
+        if (limit >= 5) {
+            timeLimit = limit;
+            localStorage.setItem('timeLimit', limit);
+            document.getElementById('time-limit-input').value = limit;
+        } else {
+            document.getElementById('time-limit-input').value = 5;
+            timeLimit = 5;
+            localStorage.setItem('timeLimit', 5);
+        }
+        if (activeModes['timeAttack']) {
+            resetTimer(); 
+        }
+    }
+    
+    // モード設定 (チェックボックスのON/OFFで設定)
+    function getActiveModes() {
+        const modes = {};
+        modes['ghost'] = document.getElementById('mode-ghost').checked;
+        modes['timeAttack'] = document.getElementById('mode-timeAttack').checked;
+        modes['gimmick'] = document.getElementById('mode-gimmick').checked;
+        return modes;
+    }
+
+    // 通常モードボタンが押されたとき (全てOFFにする)
+    function setMode(mode) {
+        if (mode === 'normal') {
+            document.getElementById('mode-ghost').checked = false;
+            document.getElementById('mode-timeAttack').checked = false;
+            document.getElementById('mode-gimmick').checked = false;
+        }
+        resetGame(true); // モードを保存してリセット
+    }
+    
     function setDifficulty(level) {
       currentDifficulty = level;
       mazeSize = difficultySettings[level];
@@ -194,12 +477,38 @@
       canvas.height = BASE_SIZE;
       cellSize = BASE_SIZE / mazeSize;
       
-      resetGame();
+      // 難易度変更時にもモードを更新・保存してからリセット
+      resetGame(true); 
     }
+    
+    // 初期モード設定の反映と保存
+    function initializeModes() {
+        const storedModes = JSON.parse(localStorage.getItem('activeModes')) || {};
+        
+        document.getElementById('mode-ghost').checked = storedModes['ghost'] || false;
+        document.getElementById('mode-timeAttack').checked = storedModes['timeAttack'] || false;
+        document.getElementById('mode-gimmick').checked = storedModes['gimmick'] || false;
+        
+        document.getElementById('time-limit-input').value = timeLimit;
+    }
+    
+    // resetGameを呼び出すときに現在のチェック状態を取得・保存
+    function resetGame(saveMode = false) {
+      if (saveMode) {
+          activeModes = getActiveModes();
+          localStorage.setItem('activeModes', JSON.stringify(activeModes));
+      } else {
+          activeModes = getActiveModes(); // チェックボックスの状態を反映
+      }
 
-    function resetGame() {
       player = { x: 0, y: 0 };
       goal = { x: mazeSize - 1, y: mazeSize - 1 };
+      score = 0;
+      playerTrail = [];
+      // ギミック効果もリセット
+      reverseMovesRemaining = 0;
+      slowTurnActive = false;
+      
       generateMaze();
       
       if (!document.fullscreenElement) {
@@ -214,33 +523,102 @@
 
     function resetTimer() {
       clearInterval(timerInterval);
-      timer = 0;
-      document.getElementById('timer-display').textContent = `Time: 0.00s | Best: ${bestTimes[currentDifficulty] || '--'}`;
+      
+      if (activeModes['timeAttack']) {
+          timer = timeLimit; 
+      } else {
+          timer = 0; 
+      }
+      updateTimerDisplay();
+
       timerInterval = setInterval(() => {
-        document.getElementById('timer-display').textContent = `Time: ${timer.toFixed(2)}s | Best: ${bestTimes[currentDifficulty] || '--'}`;
-        timer += 0.01;
+        if (activeModes['timeAttack']) {
+            timer -= 0.01;
+            if (timer <= 0) {
+                timer = 0;
+                clearInterval(timerInterval);
+                hitEffect();
+                resetGame();
+                return;
+            }
+        } else {
+            timer += 0.01;
+        }
+        updateTimerDisplay();
       }, 10);
     }
     
+    // ベストタイムのキーをモードの組み合わせに応じて生成
+    function getBestTimeKey() {
+        let key = currentDifficulty;
+        if (activeModes['ghost']) key += '_ghost';
+        if (activeModes['timeAttack']) key += '_timeAttack';
+        if (activeModes['gimmick']) key += '_gimmick';
+        
+        return key || currentDifficulty; 
+    }
+    
+    function updateTimerDisplay() {
+        const timeValue = (activeModes['timeAttack'] ? timer : timer).toFixed(2);
+        const bestKey = getBestTimeKey();
+        const bestTime = bestTimes[bestKey] || '--';
+        
+        const reverseText = reverseMovesRemaining > 0 ? ` (リバース: ${reverseMovesRemaining})` : '';
+        
+        document.getElementById('timer-display').textContent = 
+            `Time: ${timeValue}s | Score: ${score} | Best: ${bestTime}${reverseText}`;
+    }
+
     function resetBestTimes() {
       if (confirm('全てのベストタイム記録をリセットしてもよろしいですか？')) {
         localStorage.removeItem('bestTimes');
         bestTimes = {};
-        document.getElementById('timer-display').textContent = `Time: ${timer.toFixed(2)}s | Best: --`;
+        updateTimerDisplay();
         alert('全てのベストタイム記録をリセットしました。');
       }
     }
+    
+    // --- 演出関数 ---
+    function hitEffect() {
+        hitSound.currentTime = 0;
+        hitSound.play();
+        
+        // 画面フラッシュ演出
+        document.body.style.backgroundColor = '#f00'; 
+        setTimeout(() => {
+            document.body.style.backgroundColor = '#222';
+        }, 100);
+        
+        // キャンバス揺らし (簡易版)
+        canvas.style.transform = 'translate(2px, 2px)';
+        setTimeout(() => {
+            canvas.style.transform = 'translate(-2px, -2px)';
+        }, 50);
+        setTimeout(() => {
+            canvas.style.transform = 'none';
+        }, 100);
+    }
+    
+    function goalEffect() {
+        goalSound.play();
+        
+        // キャンバスの光る演出
+        canvas.style.boxShadow = `0 0 20px 10px gold`;
+        setTimeout(() => {
+            canvas.style.boxShadow = `none`;
+        }, 800);
+    }
 
+
+    // --- 全画面バグ修正ロジック ---
     function toggleFullScreen() {
       const element = document.getElementById('game');
       const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
 
       if (!isFullscreen) {
-        // 全画面表示へ
         const requestFn = element.requestFullscreen || element.webkitRequestFullscreen || element.msRequestFullscreen;
         if (requestFn) requestFn.call(element);
         
-        // 全画面表示に入った後の処理
         const updateOnFullscreen = () => {
             if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) return;
 
@@ -260,27 +638,19 @@
         document.addEventListener('msfullscreenchange', updateOnFullscreen, { once: true });
         
       } else {
-        // 全画面表示を終了
         const exitFn = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
         if (exitFn) exitFn.call(document);
 
-        // ★ 修正箇所: 全画面表示を終了した後の処理
         const restoreOnExit = () => {
             if (document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement) return;
             
-            // 描画サイズを確実に BASE_SIZE (600) に戻す
             canvas.width = BASE_SIZE; 
             canvas.height = BASE_SIZE;
-            
-            // 描画時の cellSize を BASE_SIZE 基準で再計算
             cellSize = BASE_SIZE / mazeSize;
 
-            // ★ 修正点: CSSの再計算を強制し、ブラウザのサイズリセット処理を待つための処理
-            canvas.style.display = 'block'; // 一旦 block に (ほとんど意味はないが念のため)
-            // 物理的なサイズを強制的に読み込ませる
+            canvas.style.display = 'block'; 
             canvas.offsetWidth; 
             
-            // 再描画
             draw(); 
         };
         
@@ -290,18 +660,20 @@
       }
     }
 
+    // --- 迷路生成/描画関数 ---
 
     function generateMaze() {
         maze = Array.from({ length: mazeSize }, () =>
-            Array.from({ length: mazeSize }, () => 1)
+            Array.from({ length: mazeSize }, () => CELL_TYPE.WALL)
         );
 
         const stack = [];
         let currentX = 0;
         let currentY = 0;
-        maze[currentY][currentX] = 0;
+        maze[currentY][currentX] = CELL_TYPE.PATH;
         stack.push({ x: currentX, y: currentY });
 
+        // 棒倒し法で通路を生成
         while (stack.length > 0) {
             const current = stack[stack.length - 1]; 
             currentX = current.x;
@@ -324,10 +696,10 @@
                 if (
                     nextX >= 0 && nextX < mazeSize &&
                     nextY >= 0 && nextY < mazeSize &&
-                    maze[nextY][nextX] === 1
+                    maze[nextY][nextX] === CELL_TYPE.WALL
                 ) {
-                    maze[wallY][wallX] = 0;
-                    maze[nextY][nextX] = 0;
+                    maze[wallY][wallX] = CELL_TYPE.PATH;
+                    maze[nextY][nextX] = CELL_TYPE.PATH;
                     stack.push({ x: nextX, y: nextY });
                     foundNeighbor = true;
                     break;
@@ -339,8 +711,35 @@
             }
         }
         
-        maze[0][0] = 0;
-        maze[mazeSize - 1][mazeSize - 1] = 0;
+        // ギミックモードの設定: 4種類のギミックを配置
+        if (activeModes['gimmick']) {
+            const pathCells = [];
+            for (let y = 0; y < mazeSize; y++) {
+                for (let x = 0; x < mazeSize; x++) {
+                    // 通路セルで、スタート/ゴールではない場所
+                    if (maze[y][x] === CELL_TYPE.PATH && (x !== 0 || y !== 0) && (x !== goal.x || y !== goal.y)) {
+                        pathCells.push({x, y});
+                    }
+                }
+            }
+
+            // マップサイズに応じてギミックの数を調整 (例: 10x10マスごとに約1.2個)
+            const numGimmicks = Math.floor(mazeSize * mazeSize / 80); 
+            const gimmickTypes = [CELL_TYPE.SCORE, CELL_TYPE.WARP, CELL_TYPE.REVERSE, CELL_TYPE.SLOW];
+
+            for(let i = 0; i < numGimmicks; i++) {
+                if (pathCells.length === 0) break;
+                const index = Math.floor(Math.random() * pathCells.length);
+                const cell = pathCells.splice(index, 1)[0];
+                
+                // 4種類のギミックからランダムに選択
+                const gimmickType = gimmickTypes[Math.floor(Math.random() * gimmickTypes.length)];
+                maze[cell.y][cell.x] = gimmickType;
+            }
+        }
+        
+        maze[0][0] = CELL_TYPE.PATH;
+        maze[mazeSize - 1][mazeSize - 1] = CELL_TYPE.PATH;
     }
 
     function draw() {
@@ -348,77 +747,227 @@
 
       for (let y = 0; y < mazeSize; y++) {
         for (let x = 0; x < mazeSize; x++) {
-          if (maze[y][x] === 1) {
+          const cellType = maze[y][x];
+          
+          if (cellType === CELL_TYPE.WALL) {
             ctx.fillStyle = 'black';
             ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+          } else if (cellType === CELL_TYPE.SCORE) {
+            // スコアアイテム (黄色い小さな円)
+            ctx.fillStyle = 'gold';
+            const centerX = x * cellSize + cellSize / 2;
+            const centerY = y * cellSize + cellSize / 2;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, cellSize / 3, 0, Math.PI * 2);
+            ctx.fill();
+          } else if (cellType === CELL_TYPE.WARP) {
+            // ワープマス (紫色のグリッド)
+            ctx.fillStyle = '#8a2be2';
+            ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+          } else if (cellType === CELL_TYPE.REVERSE) {
+            // リバースマス (濃いピンクの三角)
+            ctx.fillStyle = 'deeppink';
+            ctx.beginPath();
+            ctx.moveTo(x * cellSize + cellSize / 2, y * cellSize + cellSize * 0.2);
+            ctx.lineTo(x * cellSize + cellSize * 0.8, y * cellSize + cellSize * 0.8);
+            ctx.lineTo(x * cellSize + cellSize * 0.2, y * cellSize + cellSize * 0.8);
+            ctx.closePath();
+            ctx.fill();
+          } else if (cellType === CELL_TYPE.SLOW) {
+            // 減速マス (水色の三角)
+            ctx.fillStyle = 'aqua';
+            ctx.beginPath();
+            ctx.moveTo(x * cellSize + cellSize * 0.2, y * cellSize + cellSize * 0.2);
+            ctx.lineTo(x * cellSize + cellSize * 0.8, y * cellSize + cellSize * 0.2);
+            ctx.lineTo(x * cellSize + cellSize / 2, y * cellSize + cellSize * 0.8);
+            ctx.closePath();
+            ctx.fill();
           }
         }
       }
 
+      // ゴースト軌跡の描画 (★色を変更し、壁とはっきり区別できるようにしました)
+      if (activeModes['ghost']) {
+          playerTrail.forEach(p => {
+              // 軌跡の透明度を調整して、プレイヤーから遠いほど薄くする
+              const alpha = 0.8 - (playerTrail.indexOf(p) / TRAIL_LENGTH) * 0.4;
+              // プレイヤーの赤色と異なる、より暗い赤で描画
+              ctx.fillStyle = `rgba(100, 0, 0, ${alpha})`; 
+              ctx.fillRect(p.x * cellSize, p.y * cellSize, cellSize, cellSize);
+          });
+      }
+
+      // ゴールの描画
       ctx.fillStyle = 'green';
       ctx.fillRect(goal.x * cellSize, goal.y * cellSize, cellSize, cellSize);
 
-      ctx.fillStyle = 'red';
-      ctx.fillRect(player.x * cellSize, player.y * cellSize, cellSize, cellSize);
+      // プレイヤーの描画
+      ctx.fillStyle = playerColor;
+      if (playerShape === 'square') {
+          ctx.fillRect(player.x * cellSize, player.y * cellSize, cellSize, cellSize);
+      } else { // circle
+          const centerX = player.x * cellSize + cellSize / 2;
+          const centerY = player.y * cellSize + cellSize / 2;
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, cellSize / 2, 0, Math.PI * 2);
+          ctx.fill();
+      }
+      
+      // リバース効果発動中はプレイヤーにエフェクトを
+      if (reverseMovesRemaining > 0) {
+        ctx.strokeStyle = 'deeppink';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(player.x * cellSize + 1, player.y * cellSize + 1, cellSize - 2, cellSize - 2);
+      }
     }
     
     function movePlayer(dx, dy) {
-      const newX = player.x + dx;
-      const newY = player.y + dy;
+      // 減速効果が有効な場合、次の移動をスキップ
+      if (slowTurnActive) {
+          slowTurnActive = false;
+          draw(); 
+          return; 
+      }
 
+      // リバース効果による入力の反転
+      let effectiveDx = dx;
+      let effectiveDy = dy;
+      if (reverseMovesRemaining > 0) {
+          effectiveDx *= -1;
+          effectiveDy *= -1;
+          reverseMovesRemaining--;
+          updateTimerDisplay(); 
+      }
+
+      const newX = player.x + effectiveDx;
+      const newY = player.y + effectiveDy;
+      
+      // 移動前位置の保存（移動が成立する場合のみ）
       if (
         newX >= 0 && newX < mazeSize &&
         newY >= 0 && newY < mazeSize
       ) {
-        if (maze[newY][newX] === 1) {
-          clearInterval(timerInterval); 
-          hitSound.currentTime = 0;
-          hitSound.play();
-          resetGame();
-          
-        } else {
-          player.x = newX;
-          player.y = newY;
-          draw();
-
-          if (player.x === goal.x && player.y === goal.y) {
-            clearInterval(timerInterval);
-            goalSound.play();
-            const finalTime = timer.toFixed(2);
-
-            if (!bestTimes[currentDifficulty] || timer < bestTimes[currentDifficulty]) {
-              bestTimes[currentDifficulty] = finalTime;
-              localStorage.setItem('bestTimes', JSON.stringify(bestTimes));
-              alert(`ゴール！新記録：${finalTime} 秒`);
-            } else {
-              alert(`ゴール！タイム：${finalTime} 秒`);
+        
+        // ゴーストモード：移動前を軌跡に追加
+        if (activeModes['ghost']) {
+            playerTrail.push({ x: player.x, y: player.y });
+            if (playerTrail.length > TRAIL_LENGTH) {
+                playerTrail.shift(); // 古いものを削除
             }
+        }
+
+        // 衝突判定
+        const isWallCollision = maze[newY][newX] === CELL_TYPE.WALL;
+        const isGhostCollision = activeModes['ghost'] && playerTrail.some(p => p.x === newX && p.y === newY);
+
+        if (isWallCollision || isGhostCollision) {
+          clearInterval(timerInterval); 
+          hitEffect();
+          resetGame();
+          return;
+        }
+        
+        // プレイヤーの位置を更新
+        player.x = newX;
+        player.y = newY;
+        
+        // ギミック処理
+        if (activeModes['gimmick']) {
+            const currentCellType = maze[player.y][player.x];
+            if (currentCellType === CELL_TYPE.SCORE) {
+                score += 10;
+                maze[player.y][player.x] = CELL_TYPE.PATH; 
+                updateTimerDisplay();
+            } else if (currentCellType === CELL_TYPE.WARP) {
+                maze[player.y][player.x] = CELL_TYPE.PATH; 
+                
+                const pathCells = [];
+                for (let y = 0; y < mazeSize; y++) {
+                    for (let x = 0; x < mazeSize; x++) {
+                        if (maze[y][x] === CELL_TYPE.PATH && (x !== goal.x || y !== goal.y) && (x !== 0 || y !== 0)) {
+                            pathCells.push({x, y});
+                        }
+                    }
+                }
+                if (pathCells.length > 0) {
+                    const newPos = pathCells[Math.floor(Math.random() * pathCells.length)];
+                    player.x = newPos.x;
+                    player.y = newPos.y;
+                }
+            } else if (currentCellType === CELL_TYPE.REVERSE) {
+                reverseMovesRemaining = 10; 
+                maze[player.y][player.x] = CELL_TYPE.PATH;
+            } else if (currentCellType === CELL_TYPE.SLOW) {
+                slowTurnActive = true; 
+                maze[player.y][player.x] = CELL_TYPE.PATH;
+            }
+        }
+        
+        draw();
+
+        if (player.x === goal.x && player.y === goal.y) {
+          clearInterval(timerInterval);
+          goalEffect();
+          
+          let resultMessage = 'ゴール！';
+          const finalTime = timer.toFixed(2);
+          const bestKey = getBestTimeKey();
+
+          if (activeModes['timeAttack']) {
+             resultMessage += `\n残り時間: ${finalTime} 秒\nスコア: ${score}`;
+          } else {
+             resultMessage += `\nクリアタイム: ${finalTime} 秒\nスコア: ${score}`;
+             
+             if (!bestTimes[bestKey] || finalTime < bestTimes[bestKey]) {
+                bestTimes[bestKey] = finalTime;
+                localStorage.setItem('bestTimes', JSON.stringify(bestTimes));
+                resultMessage += '\n新記録達成！';
+             }
           }
+          
+          alert(resultMessage); 
+          resetGame();
         }
       }
     }
 
-    // キーボード操作 (変更なし)
+    // --- イベントリスナー ---
+
+    // キーボード操作 
     document.addEventListener('keydown', (e) => {
       if (e.repeat) return; 
       
       let dx = 0, dy = 0;
+      const key = e.key.toLowerCase();
       
-      if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') dy = -1;
-      if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') dy = 1;
-      if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') dx = -1;
-      if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') dx = 1;
+      // 矢印キー
+      if (e.key === 'ArrowUp') dy = -1;
+      else if (e.key === 'ArrowDown') dy = 1;
+      else if (e.key === 'ArrowLeft') dx = -1;
+      else if (e.key === 'ArrowRight') dx = 1;
+      // WASDキー
+      else if (key === 'w') dy = -1;
+      else if (key === 's') dy = 1;
+      else if (key === 'a') dx = -1;
+      else if (key === 'd') dx = 1;
+      // IJKLキー
+      else if (key === 'i') dy = -1;
+      else if (key === 'k') dy = 1;
+      else if (key === 'j') dx = -1;
+      else if (key === 'l') dx = 1;
+
 
       if (dx === 0 && dy === 0) return;
       
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd'].includes(e.key.toLowerCase())) {
+      const movementKeys = ['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd', 'i', 'j', 'k', 'l'];
+      if (movementKeys.includes(key)) {
         e.preventDefault();
       }
       
       movePlayer(dx, dy);
     });
 
-    // タッチ操作 (変更なし)
+    // タッチ操作
     canvas.addEventListener('touchstart', (e) => {
         if (e.touches.length > 1) return; 
         e.preventDefault();
@@ -450,7 +999,20 @@
         }
     });
 
-    // 初期化
+    // モーダルを画面外クリックで閉じる
+    window.onclick = function(event) {
+        const modal = document.getElementById('rule-modal');
+        if (event.target == modal) {
+            modal.style.display = "none";
+        }
+    }
+
+    // --- 初期化 ---
+    
+    // UIを初期設定に合わせて更新
+    initializeModes();
+    
+    // ゲームの開始
     resetGame();
   </script>
 </body>
