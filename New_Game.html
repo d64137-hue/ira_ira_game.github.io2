@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>弾幕シューティングゲーム (WASD・精密回避対応)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        body { 
+            background: #2a2a2a; 
+            color: white; 
+            text-align: center; 
+            font-family: sans-serif; 
+            margin: 0; 
+            padding-top: 20px; 
+            padding-bottom: 50px; 
+            overflow-y: auto;
+        }
+        h1 {
+            color: #76FF03;
+            margin-bottom: 20px;
+        }
+        #NewGameArea {
+            max-width: 600px; /* Canvasサイズに合わせて調整 */
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #444;
+            border-radius: 8px;
+            background: #1e1e1e;
+        }
+        #NewGameCanvas {
+            /* Canvasサイズを500x650に統一 */
+            background: #00001a;
+            border: 2px solid #76FF03;
+            display: block;
+            margin: 20px auto;
+            cursor: pointer; 
+            touch-action: none; 
+        }
+        .back-button {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #f44336; 
+            color: white;
+            text-align: center;
+            text-decoration: none;
+            border: 1px solid #d32f2f;
+            border-radius: 5px;
+            font-weight: bold;
+            transition: background-color 0.1s;
+        }
+        .back-button:hover {
+            background-color: #d32f2f;
+        }
+        #game-info {
+            font-size: 1.2em;
+            margin-bottom: 10px;
+            color: #76FF03;
+        }
+    </style>
+</head>
+<body>
+    <div id="NewGameArea">
+        <h1>🌌 弾幕シューティング（精密回避対応）</h1>
+        
+        <div id="game-info">
+            Score: <span id="score-display">0</span> | Lives: <span id="lives-display">3</span>
+        </div>
+
+        <canvas id="NewGameCanvas" width="500" height="650"></canvas>
+        
+        <a href="Iraira_Game.html" class="back-button">
+            ⬅️ イライラ棒ゲームに戻る
+        </a>
+    </div>
+    
+    <script>
+        const canvas = document.getElementById('NewGameCanvas');
+        const ctx = canvas.getContext('2d');
+        const WIDTH = canvas.width;
+        const HEIGHT = canvas.height;
+
+        // --- ゲーム状態変数 ---
+        let score = 0;
+        let lives = 3;
+        let keys = {};
+        let player;
+        let playerBullets = [];
+        let enemies = [];
+        let enemyBullets = [];
+        let isGameOver = false;
+        let gameFrame = 0;
+        let isDragging = false; 
+        let dragOffsetX = 0;
+        let dragOffsetY = 0; 
+        
+        const trail = []; // プレイヤーの移動トレイル用配列
+        const TRAIL_LENGTH = 10;
+        const FIRE_RATE = 8; // 弾の発射間隔 (フレーム)
+
+        // --- オブジェクトクラス ---
+
+        // プレイヤー 
+        class Player {
+            constructor() {
+                this.width = 20; // 弾幕回避ゲームに合わせて小型化
+                this.height = 20;
+                this.x = WIDTH / 2 - this.width / 2;
+                this.y = HEIGHT - this.height - 10;
+                this.speed = 4.5;
+                this.slowSpeed = 0.8; // 低速移動速度
+                this.color = 'cyan';
+                this.hitRadius = 3; // 当たり判定の半径
+            }
+
+            update() {
+                if (isDragging) return; 
+
+                const isSlow = keys['Shift'] || keys['z']; 
+                const currentSpeed = isSlow ? this.slowSpeed : this.speed;
+
+                // WASDと矢印キーに対応
+                if (keys['ArrowLeft'] || keys['a']) this.x -= currentSpeed;
+                if (keys['ArrowRight'] || keys['d']) this.x += currentSpeed;
+                if (keys['ArrowUp'] || keys['w']) this.y -= currentSpeed; 
+                if (keys['ArrowDown'] || keys['s']) this.y += currentSpeed; 
+
+                // 画面外に出ないように制限
+                this.x = Math.max(0, Math.min(this.x, WIDTH - this.width));
+                this.y = Math.max(0, Math.min(this.y, HEIGHT - this.height));
+                
+                // 低速移動時のトレイルを更新
+                if (isSlow) {
+                    trail.push({ x: this.getCenter().x, y: this.getCenter().y });
+                    if (trail.length > TRAIL_LENGTH) {
+                        trail.shift();
+                    }
+                } else {
+                    trail.length = 0;
+                }
+            }
+
+            draw() {
+                const isSlow = keys['Shift'] || keys['z'];
+                const center = this.getCenter();
+
+                // 1. 低速移動トレイル
+                if (isSlow && trail.length > 1) {
+                    ctx.beginPath();
+                    ctx.moveTo(trail[0].x, trail[0].y);
+                    for (let i = 1; i < trail.length; i++) {
+                        ctx.strokeStyle = `rgba(118, 255, 3, ${i / TRAIL_LENGTH * 0.5})`; // ライムグリーンのトレイル
+                        ctx.lineWidth = 1;
+                        ctx.lineTo(trail[i].x, trail[i].y);
+                        ctx.stroke();
+                    }
+                }
+                
+                // 2. プレイヤー本体（三角形）
+                ctx.fillStyle = isSlow ? '#B2FF59' : this.color; 
+                ctx.beginPath();
+                ctx.moveTo(this.x + this.width / 2, this.y);
+                ctx.lineTo(this.x, this.y + this.height);
+                ctx.lineTo(this.x + this.width, this.y + this.height);
+                ctx.closePath();
+                ctx.fill();
+
+                if (isSlow) {
+                    ctx.strokeStyle = '#76FF03';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+
+                // 3. 当たり判定（黄色い点）
+                ctx.fillStyle = isSlow ? 'yellow' : 'red';
+                ctx.beginPath();
+                ctx.arc(center.x, center.y, this.hitRadius + 1, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            getCenter() {
+                return { x: this.x + this.width / 2, y: this.y + this.height / 2, radius: this.hitRadius };
+            }
+        }
+
+        // 自機弾
+        class PlayerBullet {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.radius = 3;
+                this.speed = 10;
+                this.color = 'yellow';
+            }
+
+            update() {
+                this.y -= this.speed;
+                return this.y < 0; 
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // 敵 (横移動のみ)
+        class Enemy {
+            constructor(initialX, y, amplitude, frequency) {
+                this.width = 30;
+                this.height = 30;
+                this.initialX = initialX;
+                this.x = initialX;
+                this.y = y; 
+                this.color = 'red';
+                this.amplitude = amplitude; 
+                this.frequency = frequency; 
+                this.fireRate = 90; 
+                this.fireTimer = Math.floor(Math.random() * 90);
+                this.health = 30; // 体力を設定
+            }
+
+            update() {
+                this.x = this.initialX + Math.sin(gameFrame * this.frequency) * this.amplitude;
+
+                this.fireTimer++;
+                if (this.fireTimer >= this.fireRate) {
+                    this.fireTimer = 0;
+                    this.shoot();
+                }
+                // 体力が0になったらtrueを返し、削除を促す
+                return this.health <= 0; 
+            }
+
+            shoot() {
+                // 敵弾の発射パターンを少し強化
+                const speed = 2.5;
+                for (let i = -2; i <= 2; i++) {
+                    enemyBullets.push(new EnemyBullet(this.x + this.width / 2, this.y + this.height, speed, 'white', i * 0.5, 4));
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                
+                // 体力バー
+                ctx.fillStyle = 'lime';
+                const healthWidth = (this.health / 30) * this.width;
+                ctx.fillRect(this.x, this.y - 5, healthWidth, 3);
+            }
+
+            getCenter() {
+                return { x: this.x + this.width / 2, y: this.y + this.height / 2, radius: this.width / 2 };
+            }
+        }
+
+        // 敵弾 (再利用)
+        class EnemyBullet {
+            constructor(x, y, speed, color = 'red', dx = 0, radius = 5) {
+                this.x = x;
+                this.y = y;
+                this.radius = radius;
+                this.speed = speed;
+                this.color = color;
+                this.dx = dx; 
+            }
+
+            update() {
+                this.y += this.speed;
+                this.x += this.dx; 
+                return this.y > HEIGHT || this.x < 0 || this.x > WIDTH;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // --- ゲーム管理関数 ---
+
+        function initGame() {
+            player = new Player();
+            score = 0;
+            lives = 3;
+            enemies = [];
+            playerBullets = [];
+            enemyBullets = [];
+            isGameOver = false;
+            gameFrame = 0;
+            trail.length = 0;
+            
+            // 敵の初期配置
+            enemies.push(new Enemy(WIDTH * 0.25 - 15, 50, 50, 0.05));
+            enemies.push(new Enemy(WIDTH * 0.5 - 15, 50, 10, 0.03));
+            enemies.push(new Enemy(WIDTH * 0.75 - 15, 50, 50, 0.04));
+            
+            updateDisplay();
+            gameLoop();
+        }
+
+        function checkCollisions() {
+            // 1. 自機弾 vs 敵
+            playerBullets = playerBullets.filter(bullet => {
+                let hit = false;
+                enemies = enemies.filter(enemy => {
+                    const dist = Math.sqrt(Math.pow(bullet.x - enemy.getCenter().x, 2) + Math.pow(bullet.y - enemy.getCenter().y, 2));
+                    if (dist < bullet.radius + enemy.getCenter().radius) {
+                        hit = true;
+                        enemy.health -= 1; // ダメージを与える
+                        if (enemy.health <= 0) {
+                            score += 100; // 撃破スコア
+                        } else {
+                            score += 5; // ヒットスコア
+                        }
+                        return enemy.health > 0; // 体力が残っていたら配列に残す
+                    }
+                    return true; 
+                });
+                return !hit && !bullet.update();
+            });
+
+            // 2. 敵弾 vs プレイヤー
+            if (!isGameOver) {
+                enemyBullets = enemyBullets.filter(bullet => {
+                    const playerCenter = player.getCenter();
+                    const dist = Math.sqrt(Math.pow(bullet.x - playerCenter.x, 2) + Math.pow(bullet.y - playerCenter.y, 2));
+                    
+                    if (dist < bullet.radius + playerCenter.radius) {
+                        lives--;
+                        updateDisplay();
+                        if (lives <= 0) {
+                            gameOver();
+                        }
+                        return false; 
+                    }
+                    return !bullet.update(); 
+                });
+            }
+        }
+        
+        // 弾の発射制御
+        function playerShoot() {
+            if (keys[' '] || keys['x']) {
+                if (gameFrame % FIRE_RATE === 0) {
+                    playerBullets.push(new PlayerBullet(player.x + player.width / 2, player.y));
+                }
+            }
+        }
+
+        function gameOver() {
+            isGameOver = true;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, WIDTH, HEIGHT);
+            ctx.fillStyle = 'white';
+            ctx.font = '40px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('GAME OVER', WIDTH / 2, HEIGHT / 2 - 30);
+            ctx.font = '24px sans-serif';
+            ctx.fillText(`Final Score: ${score}`, WIDTH / 2, HEIGHT / 2 + 20);
+            ctx.fillText('Press R to Restart', WIDTH / 2, HEIGHT / 2 + 70);
+        }
+
+        function updateDisplay() {
+            document.getElementById('score-display').textContent = score;
+            document.getElementById('lives-display').textContent = lives;
+        }
+
+        // --- メインゲームループ ---
+
+        function gameLoop() {
+            if (isGameOver) return;
+            gameFrame++; 
+            ctx.textAlign = 'start';
+
+            playerShoot(); // 弾の発射を更新時にチェック
+
+            player.update();
+            enemies = enemies.filter(enemy => !enemy.update());
+            checkCollisions();
+
+            ctx.clearRect(0, 0, WIDTH, HEIGHT); 
+            ctx.fillStyle = '#00001a';
+            ctx.fillRect(0, 0, WIDTH, HEIGHT);
+            
+            player.draw();
+            playerBullets.forEach(bullet => bullet.draw());
+            enemies.forEach(enemy => enemy.draw());
+            enemyBullets.forEach(bullet => bullet.draw());
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- イベントリスナー ---
+        
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            const key = e.key.toLowerCase();
+            // WASD/移動/低速キーのデフォルト動作を防ぐ
+            if (key === 'w' || key === 'a' || key === 's' || key === 'd' || key === 'shift' || key === 'z' || key === ' ') {
+                e.preventDefault(); 
+            }
+
+            if (isGameOver && key === 'r') {
+                initGame(); 
+                return;
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+        
+        // --- ドラッグ/タッチ操作 (低速モードの自動適用を含む) ---
+        function getCanvasMousePosition(event) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+            const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+            
+            const x = (clientX - rect.left) * (canvas.width / rect.width);
+            const y = (clientY - rect.top) * (canvas.height / rect.height);
+            return { x, y };
+        }
+
+        function handleDragStart(event) {
+            if (isGameOver) return;
+            const pos = getCanvasMousePosition(event);
+            
+            dragOffsetX = pos.x - player.getCenter().x;
+            dragOffsetY = pos.y - player.getCenter().y;
+            
+            isDragging = true;
+            keys['Shift'] = true; // ドラッグ中は自動的に低速移動をON
+            event.preventDefault(); 
+        }
+
+        function handleDragMove(event) {
+            if (!isDragging || isGameOver) return;
+            const pos = getCanvasMousePosition(event);
+            
+            let newX = pos.x - dragOffsetX - player.width / 2;
+            let newY = pos.y - dragOffsetY - player.height / 2;
+
+            newX = Math.max(0, Math.min(newX, WIDTH - player.width));
+            newY = Math.max(0, Math.min(newY, HEIGHT - player.height));
+            
+            player.x = newX;
+            player.y = newY;
+            
+            event.preventDefault(); 
+        }
+
+        function handleDragEnd() {
+            isDragging = false;
+            keys['Shift'] = false; // ドラッグ終了で低速移動をOFF
+        }
+
+        // PC向けマウスイベント
+        canvas.addEventListener('mousedown', handleDragStart);
+        document.addEventListener('mousemove', handleDragMove);
+        document.addEventListener('mouseup', handleDragEnd);
+
+        // スマホ/タブレット向けタッチイベント
+        canvas.addEventListener('touchstart', handleDragStart);
+        document.addEventListener('touchmove', handleDragMove, { passive: false });
+        document.addEventListener('touchend', handleDragEnd);
+
+        // --- 初期化 ---
+        initGame();
+
+    </script>
+</body>
+</html>
